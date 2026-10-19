@@ -58,6 +58,7 @@ button.secondary,a.btn.secondary{background:#eef3f6;color:#17364b;border:1px sol
     <button id="saveBtn" disabled>원본 PNG 저장</button>
     <button id="openBtn" class="secondary" disabled>원본 이미지 새 창으로 열기</button>
   </div>
+  <p class="tip"><strong>지번 번호는 이 페이지의 지도 위에만 표시됩니다.</strong> ‘원본 이미지 새 창으로 열기’와 ‘원본 PNG 저장’은 지적도 원본만 보여 주므로 번호가 없는 것이 정상입니다.</p>
   <p class="tip">모든 필지 경계를 조회해 지도 범위를 정한 뒤 브이월드 WMS에서 <strong>한 장의 PNG를 직접 요청</strong>합니다. 이미지에 선, 지번, 강조색 등을 추가하거나 여러 이미지를 합성하지 않습니다. 지도에 표시되는 지적정보는 참고용이며, 법적 경계 확인에는 공식 지적자료가 필요합니다.</p>
 </section>
 <footer>자료 출처: 국토교통부 브이월드 · 대상지: 경기도 안성시 양성면 미산리 · 본 도구는 데이터 응답을 임의로 수정해 지적도를 만들지 않습니다.</footer>
@@ -144,11 +145,21 @@ function imageLoad(url){return new Promise((resolve,reject)=>{
 
 // 아래 SVG 표시는 확인용 UI에만 존재한다. WMS 원본 이미지나 다운로드 바이트는 수정하지 않는다.
 function ringsOf(feature){
- const g=feature?.geometry||{};const coords=g.coordinates;
- if(!Array.isArray(coords))return [];
- if(g.type==='Polygon')return coords;
- if(g.type==='MultiPolygon')return coords.flatMap(poly=>poly);
- return []
+ // WFS와 2D 데이터 응답은 동일한 GeoJSON 좌표를 다른 도형 유형으로 표시할 수 있다.
+ // 좌표 중첩구조에서 실제 다각형 꼭짓점 배열만 선별한다. 반환 좌표는 수정하지 않는다.
+ const coordinates=feature?.geometry?.coordinates;
+ if(!Array.isArray(coordinates))return [];
+ const rings=[];
+ const visit=(node)=>{
+  if(!Array.isArray(node)||!node.length)return;
+  if(Array.isArray(node[0])&&node[0].length>=2&&typeof node[0][0]==='number'&&typeof node[0][1]==='number'){
+   if(node.length>=3)rings.push(node);
+   return;
+  }
+  for(const child of node)visit(child);
+ };
+ visit(coordinates);
+ return rings
 }
 function renderParcelOverlay(){
  const frame=$('preview').querySelector('.map-frame'); if(!frame||!storedBbox){return}
@@ -199,7 +210,9 @@ function renderParcelOverlay(){
   const circle=node('circle',{cx:o.x,cy:o.y,r:o.selected?22:18,fill:o.selected?'#ff9e00':'#0a587b',stroke:'white','stroke-width':3,opacity:o.faint?.55:1});svg.appendChild(circle);
   const label=node('text',{x:o.x,y:o.y+6,'text-anchor':'middle',fill:'white','font-size':o.selected?23:20,'font-weight':800,'font-family':'Arial, sans-serif'});label.textContent=String(o.p.index+1);svg.appendChild(label)
  }
- frame.appendChild(svg)
+ frame.appendChild(svg);
+ if(!largest.length){detail.textContent='필지 데이터는 조회됐지만 지도 위 번호 좌표를 생성하지 못했습니다. 출력방식을 확인해 주세요.';}
+ else {detail.textContent+=' · 지도 번호 '+largest.length+'/8개 표시';}
 }
 $('overlayBtn').addEventListener('click',()=>{showParcelOverlay=!showParcelOverlay;renderParcelOverlay()});
 async function renderSelectedMode(){
