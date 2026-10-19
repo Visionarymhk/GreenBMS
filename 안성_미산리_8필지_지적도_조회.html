@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>안성시 미산리 8개 필지 | 브이월드 원본 지적도 출력</title>
+<style>
+:root {font-family: "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; color:#1b2c3b; background:#f5f7f8;}
+*{box-sizing:border-box} body{margin:0;line-height:1.55} .wrap{max-width:1120px;margin:0 auto;padding:36px 24px 70px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.6px}h2{font-size:17px;margin:0 0 12px}
+.sub{color:#637482;margin:0 0 24px;font-size:14px}.panel{background:#fff;border:1px solid #dce4e9;border-radius:14px;padding:22px;margin:16px 0;box-shadow:0 6px 22px rgba(22,44,62,.035)}
+.controls{display:grid;grid-template-columns:minmax(270px,1fr) auto;align-items:end;gap:14px}
+label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}input{width:100%;padding:12px 14px;border:1px solid #bacbd6;border-radius:8px;font:inherit;font-size:14px}
+button,a.btn{background:#163d59;color:white;border:0;border-radius:8px;padding:12px 18px;font-size:14px;font-weight:650;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button.secondary,a.btn.secondary{background:#eef3f6;color:#17364b;border:1px solid #d0dce2}button:disabled{opacity:.45;cursor:not-allowed}
+.tip{color:#657884;font-size:12px;margin:10px 0 0}.status{white-space:pre-wrap;font-size:13px;background:#f0f5f8;border-left:3px solid #306785;padding:13px;border-radius:6px}
+.tablebox{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #edf0f2;padding:9px 10px;text-align:left}th{background:#f5f8fa;color:#456070} td:nth-child(1),td:nth-child(3){white-space:nowrap}.ok{color:#21734c;font-weight:700}.warn{color:#b55e27;font-weight:650}
+.preview{min-height:270px;display:flex;justify-content:center;align-items:center;background:#fafafa;border:1px dashed #cbd7df;border-radius:10px;padding:12px}
+.preview img{display:block;max-width:100%;height:auto;border:1px solid #e7ecef} .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}footer{font-size:12px;color:#667785;margin-top:24px}
+@media(max-width:680px){.wrap{padding:22px 12px 40px}h1{font-size:21px}.controls{grid-template-columns:1fr}button{width:100%}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<h1>안성시 양성면 미산리 8개 필지</h1>
+<p class="sub">브이월드 지적도 조회 · 지도 원본 이미지 출력 도구</p>
+<section class="panel">
+  <h2>① API 인증키 입력</h2>
+  <div class="controls">
+    <div><label for="apiKey">브이월드 발급키</label><input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="브이월드 발급키를 붙여 넣으세요"></div>
+    <button id="queryBtn" type="button">8개 필지 조회 및 지도 생성</button>
+  </div>
+  <p class="tip">반드시 등록된 <strong>https://greenbms.co.kr</strong>에서 실행하세요. 인증키는 이 HTML 파일에 저장되지 않으며, 입력한 값은 브이월드 API 요청에만 사용됩니다. 브라우저 개발자 도구에는 요청 URL이 나타날 수 있습니다.</p>
+</section>
+<section class="panel">
+  <h2>② 조회 대상 목록</h2>
+  <div class="tablebox"><table><thead><tr><th>번호</th><th>지번</th><th>조회용 필지고유번호(PNU)</th><th>조회 결과</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <p class="tip">PNU는 미산리 법정리 코드(4155036032)와 지번을 결합한 조회용 값입니다. API 응답의 PNU와 대조하여 일치하는 필지만 인정합니다.</p>
+</section>
+<section class="panel">
+  <h2>③ 원본 지적도 출력</h2>
+  <div id="status" class="status" aria-live="polite">인증키를 입력하고 조회 버튼을 누르세요.</div>
+  <div id="preview" class="preview" style="margin-top:16px">브이월드가 제공하는 지도 이미지가 표시됩니다.</div>
+  <div class="actions">
+    <button id="saveBtn" disabled>원본 PNG 저장</button>
+    <button id="openBtn" class="secondary" disabled>원본 이미지 새 창으로 열기</button>
+  </div>
+  <p class="tip">모든 필지 경계를 조회해 지도 범위를 정한 뒤 브이월드 WMS에서 <strong>한 장의 PNG를 직접 요청</strong>합니다. 이미지에 선, 지번, 강조색 등을 추가하거나 여러 이미지를 합성하지 않습니다. 지도에 표시되는 지적정보는 참고용이며, 법적 경계 확인에는 공식 지적자료가 필요합니다.</p>
+</section>
+<footer>자료 출처: 국토교통부 브이월드 · 대상지: 경기도 안성시 양성면 미산리 · 본 도구는 데이터 응답을 임의로 수정해 지적도를 만들지 않습니다.</footer>
+</main>
+<script>
+'use strict';
+// 공식 출처에서 확인한 미산리 법정리 코드. 지번은 사용자가 제공한 매수의향서 기준.
+const LI_CODE='4155036032';
+const PARCELS=['400-1','400-2','400-3','400-4','400-64','산54','산55','산58-1'];
+const $=id=>document.getElementById(id);
+function pnuFor(lot){const mountain=lot.startsWith('산');const n=mountain?lot.slice(1):lot;const [a,b='0']=n.split('-');return LI_CODE+(mountain?'2':'1')+a.padStart(4,'0')+b.padStart(4,'0')}
+const parcels=PARCELS.map((lot,index)=>({index,lot,pnu:pnuFor(lot),state:'조회 전',features:[]}));
+let activeWmsUrl=null;
+function drawRows(){ $('rows').replaceChildren(); for(const p of parcels){const tr=document.createElement('tr');for(const value of [String(p.index+1),'미산리 '+p.lot,p.pnu,p.state]){const td=document.createElement('td');td.textContent=value;if(value==='확인')td.className='ok';else if(value.startsWith('실패')||value==='정보 없음')td.className='warn';tr.appendChild(td)}$('rows').appendChild(tr)}}
+function show(s){$('status').textContent=s}
+function setBusy(yes){$('queryBtn').disabled=yes; $('queryBtn').textContent=yes?'조회 중…':'8개 필지 조회 및 지도 생성'}
+function kvurl(base,params){const q=new URLSearchParams(params);return base+'?'+q.toString()}
+function jsonp(url,timeout=12000){return new Promise((resolve,reject)=>{const name='vwCallback_'+Date.now()+'_'+Math.floor(Math.random()*10000000);const s=document.createElement('script');let ended=false;let timer;const finish=(error,val)=>{if(ended)return;ended=true;clearTimeout(timer);delete window[name];s.remove();error?reject(error):resolve(val)};window[name]=v=>finish(null,v);s.onerror=()=>finish(new Error('API 응답 실패'));timer=setTimeout(()=>finish(new Error('응답 시간 초과')),timeout);s.src=url+(url.includes('?')?'&':'?')+'callback='+name;document.head.appendChild(s)})}
+function parseFeatures(data){
+ if(typeof data==='string'){try{data=JSON.parse(data)}catch{throw new Error('서버가 JSON 대신 다른 형식으로 응답했습니다')}}
+ if(data?.response?.status==='ERROR'){let e=data.response.error||{};throw new Error([e.code,e.text].filter(Boolean).join(': ')||'API 오류')}
+ if(data?.response?.status==='NOT_FOUND') return [];
+ const col=data?.response?.result?.featureCollection||data?.featureCollection||data;
+ if(Array.isArray(col?.features))return col.features;
+ if(Array.isArray(col?.items))return col.items;
+ if(Array.isArray(col))return col;
+ throw new Error('필지 자료 응답 구조를 해석할 수 없습니다')
+}
+function selectFeatures(features,pnu){return features.filter(f=>String(f?.properties?.pnu||f?.properties?.PNU||'')===pnu && f.geometry && f.geometry.coordinates)}
+async function byWfs(p,key,domain){
+ const url=kvurl('https://api.vworld.kr/req/wfs',{SERVICE:'WFS',REQUEST:'GetFeature',VERSION:'1.1.0',TYPENAME:'lp_pa_cbnd_bubun',PNU:p.pnu,MAXFEATURES:'10',SRSNAME:'EPSG:4326',OUTPUT:'text/javascript',KEY:key,DOMAIN:domain});
+ const data=await jsonp(url,13000);return selectFeatures(parseFeatures(data),p.pnu)
+}
+async function byData(p,key,domain){
+ const url=kvurl('https://api.vworld.kr/req/data',{service:'data',version:'2.0',request:'getfeature',data:'LP_PA_CBND_BUBUN',attrfilter:'pnu:=:'+p.pnu,crs:'EPSG:4326',geometry:'true',attribute:'true',format:'json',size:'10',page:'1',key,domain});
+ const data=await jsonp(url,13000);return selectFeatures(parseFeatures(data),p.pnu)
+}
+// GeoJSON 좌표를 원본 지적도 범위 조회에만 사용한다. 이미지 픽셀에는 어떠한 도형도 추가하지 않는다.
+function flattenCoords(node,collect){if(!Array.isArray(node))return;if(node.length>=2&&typeof node[0]==='number'&&typeof node[1]==='number'){if(Number.isFinite(node[0])&&Number.isFinite(node[1]))collect(node[0],node[1]);return}for(const child of node)flattenCoords(child,collect)}
+function lonLatToMerc(lon,lat){const a=6378137;const bounded=Math.max(-85,Math.min(85,lat));return [a*lon*Math.PI/180,a*Math.log(Math.tan(Math.PI/4+bounded*Math.PI/360))]}
+function extentFor(features){let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,n=0;for(const f of features){flattenCoords(f.geometry.coordinates,(lon,lat)=>{if(lon<123||lon>133||lat<32||lat>41)return;const [x,y]=lonLatToMerc(lon,lat); minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);n++})}if(!n)throw new Error('확인된 필지에 사용할 수 있는 경계 좌표가 없습니다');return [minX,minY,maxX,maxY]}
+function paddedExtent(bbox,width,height){let [a,b,c,d]=bbox;let cx=(a+c)/2,cy=(b+d)/2,spanX=Math.max(c-a,180),spanY=Math.max(d-b,180);spanX*=1.15;spanY*=1.15;const ratio=width/height;if(spanX/spanY<ratio)spanX=spanY*ratio;else spanY=spanX/ratio;return [cx-spanX/2,cy-spanY/2,cx+spanX/2,cy+spanY/2]}
+function makeWmsUrl(bbox,key,domain){
+ // WMS 1.3.0 + EPSG:3857은 동·북 방향 x/y로 bbox를 작성한다.
+ const extent=paddedExtent(bbox,1600,900);
+ return kvurl('https://api.vworld.kr/req/wms',{SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetMap',LAYERS:'lt_c_landinfobasemap',STYLES:'lt_c_landinfobasemap',CRS:'EPSG:3857',BBOX:extent.map(x=>x.toFixed(3)).join(','),WIDTH:'1600',HEIGHT:'900',FORMAT:'image/png',TRANSPARENT:'FALSE',KEY:key,DOMAIN:domain})
+}
+async function previewImage(url){return new Promise((resolve,reject)=>{const image=new Image();image.referrerPolicy='strict-origin-when-cross-origin';image.onload=()=>{const box=$('preview');box.replaceChildren(image);resolve()};image.onerror=()=>reject(new Error('WMS 지도 이미지를 읽지 못했습니다. 키의 WMS 사용 허가 및 등록 도메인, 브이월드 서버 상태를 확인하세요.'));image.src=url})}
+async function queryAll(){
+ const key=$('apiKey').value.trim();if(!key){show('브이월드 인증키를 입력하세요.');return}
+ if(!['greenbms.co.kr','www.greenbms.co.kr','localhost','127.0.0.1'].includes(location.hostname)){show('현재 도메인: '+(location.hostname||'(로컬 파일)')+'\n인증키 발급 시 등록한 greenbms.co.kr에 업로드한 뒤 열어야 인증이 성공할 수 있습니다.');return}
+ let domain=location.origin; if(location.protocol==='file:'){show('로컬 파일에서는 인증 도메인을 증명할 수 없습니다. greenbms.co.kr에 업로드한 URL에서 실행하세요.');return}
+ setBusy(true);activeWmsUrl=null;$('saveBtn').disabled=true;$('openBtn').disabled=true; $('preview').textContent='조회 중입니다…';for(const p of parcels){p.state='대기';p.features=[]}drawRows();
+ try{
+  let preferred='WFS';let fails=[];
+  for(const p of parcels){p.state='조회 중';drawRows();show((p.index+1)+'/8 필지 조회 중: 미산리 '+p.lot+'\n공식 필지 경계 데이터만 사용합니다.');let f=[];let err=[];
+   for(const method of [preferred,preferred==='WFS'?'DATA':'WFS']){
+    try{f=method==='WFS'?await byWfs(p,key,domain):await byData(p,key,domain);if(f.length){preferred=method;break}err.push(method+': 해당 PNU 결과 없음')}catch(e){err.push(method+': '+e.message)}
+   }
+   if(f.length){p.features=f;p.state='확인'}else{p.state='실패';fails.push('미산리 '+p.lot+' ('+p.pnu+') — '+err.join('; '))}
+   drawRows();
+  }
+  if(fails.length){show('8개 필지 중 '+(8-fails.length)+'개 확인, '+fails.length+'개 미확인.\n\n'+fails.join('\n')+'\n\n모든 필지가 확인되지 않아 전체 지적도는 생성하지 않았습니다. API 선택 또는 지번 자료를 확인한 뒤 다시 조회하세요.');$('preview').textContent='일부 필지 확인 실패로 전체 지적도 생성을 중지했습니다.';return}
+  const all=parcels.flatMap(p=>p.features);const bbox=extentFor(all);const url=makeWmsUrl(bbox,key,domain);show('8개 필지를 모두 확인했습니다.\n원본 지적도 PNG를 불러오는 중입니다.');await previewImage(url);activeWmsUrl=url;$('saveBtn').disabled=false;$('openBtn').disabled=false;show('8개 필지 확인 완료.\n브이월드 WMS가 반환한 PNG 한 장을 그대로 표시했습니다.\n지도 내용을 추가·수정·합성하지 않았습니다.\nPNG 저장 버튼을 누르세요.')
+ }catch(e){show('처리 실패: '+e.message+'\n등록 도메인, 브이월드 인증키 및 선택 API(WMS/WFS 또는 2D 데이터)를 확인하세요.');$('preview').textContent='출력 실패'}finally{setBusy(false)}
+}
+$('queryBtn').addEventListener('click',queryAll);
+$('openBtn').addEventListener('click',()=>{if(activeWmsUrl)window.open(activeWmsUrl,'_blank','noopener,noreferrer')});
+$('saveBtn').addEventListener('click',async()=>{
+ if(!activeWmsUrl)return;
+ try{const r=await fetch(activeWmsUrl);if(!r.ok)throw new Error('HTTP '+r.status);const blob=await r.blob();if(!blob.type.toLowerCase().includes('png'))throw new Error('PNG가 아닌 응답입니다');const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='안성시_양성면_미산리_8개필지_브이월드_지적도_원본.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);show('브이월드에서 수신한 원본 PNG를 저장했습니다. (픽셀 변경 없음)')}
+ catch(e){show('원본 PNG의 자동 저장이 브라우저 보안정책 때문에 제한될 수 있습니다.\n[원본 이미지 새 창으로 열기]를 눌러 이미지에 마우스 오른쪽 클릭 → 이미지 저장을 이용하세요.\n사유: '+e.message)}
+});
+drawRows();
+</script>
+</body>
+</html>
