@@ -17,7 +17,7 @@ button.secondary,a.btn.secondary{background:#eef3f6;color:#17364b;border:1px sol
 .tip{color:#657884;font-size:12px;margin:10px 0 0}.status{white-space:pre-wrap;font-size:13px;background:#f0f5f8;border-left:3px solid #306785;padding:13px;border-radius:6px}
 .tablebox{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #edf0f2;padding:9px 10px;text-align:left}th{background:#f5f8fa;color:#456070} td:nth-child(1),td:nth-child(3){white-space:nowrap}.ok{color:#21734c;font-weight:700}.warn{color:#b55e27;font-weight:650}
 .preview{min-height:270px;display:flex;justify-content:center;align-items:center;background:#fafafa;border:1px dashed #cbd7df;border-radius:10px;padding:12px}
-.preview img{display:block;max-width:100%;height:auto;border:1px solid #e7ecef} .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}footer{font-size:12px;color:#667785;margin-top:24px}
+.preview img{display:block;max-width:100%;height:auto;border:1px solid #e7ecef} .map-frame{position:relative;display:block;width:min(100%,1600px);line-height:0} .map-frame>img{display:block;width:100%;height:auto;border:0}.parcel-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.location-btn{padding:6px 10px;font-size:12px;white-space:nowrap;background:#f1f6f9;color:#174663;border:1px solid #bacbd6}.location-btn.active{background:#dcebf3;border-color:#1d668c}.location-btn:disabled{opacity:.4}.map-legend{font-size:13px;margin-top:12px;color:#355367}.map-legend strong{color:#16415e} .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}footer{font-size:12px;color:#667785;margin-top:24px}
 @media(max-width:680px){.wrap{padding:22px 12px 40px}h1{font-size:21px}.controls{grid-template-columns:1fr}button{width:100%}}
 </style>
 </head>
@@ -35,13 +35,14 @@ button.secondary,a.btn.secondary{background:#eef3f6;color:#17364b;border:1px sol
 </section>
 <section class="panel">
   <h2>② 조회 대상 목록</h2>
-  <div class="tablebox"><table><thead><tr><th>번호</th><th>지번</th><th>조회용 필지고유번호(PNU)</th><th>조회 결과</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <div class="tablebox"><table><thead><tr><th>번호</th><th>지번</th><th>조회용 필지고유번호(PNU)</th><th>조회 결과</th><th>지도 위치</th></tr></thead><tbody id="rows"></tbody></table></div>
   <p class="tip">PNU는 미산리 법정리 코드(4155036032)와 지번을 결합한 조회용 값입니다. API 응답의 PNU와 대조하여 일치하는 필지만 인정합니다.</p>
 </section>
 <section class="panel">
   <h2>③ 원본 지적도 출력</h2>
   <div id="status" class="status" aria-live="polite">인증키를 입력하고 조회 버튼을 누르세요.</div>
   <div id="preview" class="preview" style="margin-top:16px">브이월드가 제공하는 지도 이미지가 표시됩니다.</div>
+  <div class="actions" style="align-items:center"><button id="overlayBtn" type="button" class="secondary" disabled>번호·경계 숨기기</button><span id="selectedParcel" class="map-legend">지적도 원본 위에 조회된 8개 필지를 별도 표시합니다. 원본 PNG에는 표시가 저장되지 않습니다.</span></div>
   <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:end">
    <div style="flex:1;min-width:260px"><label for="mapMode">원본 지적도 출력방식</label>
    <select id="mapMode" style="width:100%;padding:12px;border:1px solid #bacbd6;border-radius:8px;background:white;color:#1b2c3b;font:inherit;font-size:14px">
@@ -69,8 +70,24 @@ const PARCELS=['400-1','400-2','400-3','400-4','400-64','산54','산55','산58-1
 const $=id=>document.getElementById(id);
 function pnuFor(lot){const mountain=lot.startsWith('산');const n=mountain?lot.slice(1):lot;const [a,b='0']=n.split('-');return LI_CODE+(mountain?'2':'1')+a.padStart(4,'0')+b.padStart(4,'0')}
 const parcels=PARCELS.map((lot,index)=>({index,lot,pnu:pnuFor(lot),state:'조회 전',features:[]}));
-let activeWmsUrl=null; let storedBbox=null; let storedKey=null; let storedDomain=null;
-function drawRows(){ $('rows').replaceChildren(); for(const p of parcels){const tr=document.createElement('tr');for(const value of [String(p.index+1),'미산리 '+p.lot,p.pnu,p.state]){const td=document.createElement('td');td.textContent=value;if(value==='확인')td.className='ok';else if(value.startsWith('실패')||value==='정보 없음')td.className='warn';tr.appendChild(td)}$('rows').appendChild(tr)}}
+let activeWmsUrl=null; let storedBbox=null; let storedKey=null; let storedDomain=null;let selectedParcelIndex=null;let showParcelOverlay=true;
+function drawRows(){
+ $('rows').replaceChildren();
+ for(const p of parcels){
+  const tr=document.createElement('tr');
+  for(const value of [String(p.index+1),'미산리 '+p.lot,p.pnu,p.state]){
+   const td=document.createElement('td');td.textContent=value;
+   if(value==='확인')td.className='ok';else if(value.startsWith('실패')||value==='정보 없음')td.className='warn';
+   tr.appendChild(td)
+  }
+  const cell=document.createElement('td'),btn=document.createElement('button');
+  btn.type='button';btn.className='location-btn'+(selectedParcelIndex===p.index?' active':'');
+  btn.textContent='표시';btn.disabled=p.state!=='확인';
+  btn.setAttribute('aria-label','미산리 '+p.lot+' 지도에서 표시');
+  btn.addEventListener('click',()=>{selectedParcelIndex=selectedParcelIndex===p.index?null:p.index;showParcelOverlay=true;renderParcelOverlay();drawRows()});
+  cell.appendChild(btn);tr.appendChild(cell);$('rows').appendChild(tr)
+ }
+}
 function show(s){$('status').textContent=s}
 function setBusy(yes){$('queryBtn').disabled=yes; $('queryBtn').textContent=yes?'조회 중…':'8개 필지 조회 및 지도 생성'}
 function kvurl(base,params){const q=new URLSearchParams(params);return base+'?'+q.toString()}
@@ -115,7 +132,76 @@ function makeWmsUrl(bbox,key,domain,mode){
  }
  return kvurl('https://api.vworld.kr/req/wms',{SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetMap',LAYERS:cfg.layers,STYLES:cfg.styles,CRS:cfg.crs,BBOX:box.map(x=>x.toFixed(cfg.crs==='EPSG:4326'?7:3)).join(','),WIDTH:'1600',HEIGHT:'900',FORMAT:'image/png',TRANSPARENT:'FALSE',KEY:key,DOMAIN:domain})
 }
-function imageLoad(url){return new Promise((resolve,reject)=>{const image=new Image();image.alt='브이월드에서 받은 원본 지적도 지도';image.onload=()=>{const box=$('preview');box.replaceChildren(image);resolve()};image.onerror=()=>reject(new Error('브이월드에서 PNG 이미지를 불러오지 못했습니다.'));image.src=url})}
+function imageLoad(url){return new Promise((resolve,reject)=>{
+ const image=new Image();image.alt='브이월드에서 받은 원본 지적도 지도';
+ image.onload=()=>{
+  const frame=document.createElement('div');frame.className='map-frame';frame.appendChild(image);
+  $('preview').replaceChildren(frame);renderParcelOverlay();resolve()
+ };
+ image.onerror=()=>reject(new Error('브이월드에서 PNG 이미지를 불러오지 못했습니다.'));
+ image.src=url
+})}
+
+// 아래 SVG 표시는 확인용 UI에만 존재한다. WMS 원본 이미지나 다운로드 바이트는 수정하지 않는다.
+function ringsOf(feature){
+ const g=feature?.geometry||{};const coords=g.coordinates;
+ if(!Array.isArray(coords))return [];
+ if(g.type==='Polygon')return coords;
+ if(g.type==='MultiPolygon')return coords.flatMap(poly=>poly);
+ return []
+}
+function renderParcelOverlay(){
+ const frame=$('preview').querySelector('.map-frame'); if(!frame||!storedBbox){return}
+ frame.querySelector('.parcel-overlay')?.remove();
+ $('overlayBtn').disabled=false;
+ $('overlayBtn').textContent=showParcelOverlay?'번호·경계 숨기기':'번호·경계 표시하기';
+ const detail=$('selectedParcel');
+ if(!showParcelOverlay){detail.textContent='원본 지적도만 표시 중 · 내려받는 원본 PNG에는 지번 표시가 포함되지 않습니다.';return}
+ detail.textContent=selectedParcelIndex===null?'번호 1~8은 위 표의 지번에 대응합니다. 각 행의 ‘표시’를 누르면 해당 필지가 강조됩니다.':'선택한 필지: '+(selectedParcelIndex+1)+'번 미산리 '+parcels[selectedParcelIndex].lot;
+ const svgNs='http://www.w3.org/2000/svg';
+ const svg=document.createElementNS(svgNs,'svg');svg.setAttribute('class','parcel-overlay');svg.setAttribute('viewBox','0 0 1600 900');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-label','조회 필지 경계와 지번 번호');
+ const e=paddedExtent(storedBbox,1600,900),mode=$('mapMode').value;
+ let project;
+ if(WMS_MODES[mode]?.crs==='EPSG:4326'){
+  const [west,south]=mercToLonLat(e[0],e[1]);const [east,north]=mercToLonLat(e[2],e[3]);
+  project=(lon,lat)=>[(lon-west)/(east-west)*1600,(north-lat)/(north-south)*900]
+ }else project=(lon,lat)=>{const [x,y]=lonLatToMerc(lon,lat);return [(x-e[0])/(e[2]-e[0])*1600,(e[3]-y)/(e[3]-e[1])*900]};
+ const node=(tag,attrs)=>{const el=document.createElementNS(svgNs,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,String(v));return el};
+ const largest=[];
+ for(const p of parcels){
+  const selected=selectedParcelIndex===p.index;
+  const faint=selectedParcelIndex!==null&&!selected;
+  let largestRing=null,largestArea=0;
+  for(const f of p.features){
+   const rings=ringsOf(f),parts=[];
+   for(const r of rings){if(!Array.isArray(r)||r.length<3)continue;
+    const projected=r.map(point=>project(point[0],point[1])).filter(point=>point.every(Number.isFinite));
+    if(projected.length<3)continue;
+    parts.push('M'+projected.map(point=>point[0].toFixed(2)+' '+point[1].toFixed(2)).join('L')+'Z');
+    let twiceArea=0;
+    for(let i=0;i<projected.length;i++){const a=projected[i],b=projected[(i+1)%projected.length];twiceArea+=a[0]*b[1]-b[0]*a[1]}
+    const area=Math.abs(twiceArea);
+    if(area>largestArea){largestArea=area;largestRing=projected}
+   }
+   if(!parts.length)continue;
+   svg.appendChild(node('path',{d:parts.join(' '),'fill-rule':'evenodd',fill:selected?'rgba(245,158,11,.32)':faint?'rgba(0,0,0,0)':'rgba(5,125,161,.12)',stroke:selected?'#ff9e00':faint?'#5b8c9a':'#00739a','stroke-width':selected?5:faint?1.5:2.8,'stroke-linejoin':'round'}))
+  }
+  if(largestRing){
+   let sum=0,cx=0,cy=0;
+   for(let i=0;i<largestRing.length;i++){const a=largestRing[i],b=largestRing[(i+1)%largestRing.length];const d=a[0]*b[1]-b[0]*a[1];sum+=d;cx+=(a[0]+b[0])*d;cy+=(a[1]+b[1])*d}
+   let x,y;
+   if(Math.abs(sum)>0.01){x=cx/(3*sum);y=cy/(3*sum)}
+   else {x=largestRing.reduce((v,q)=>v+q[0],0)/largestRing.length;y=largestRing.reduce((v,q)=>v+q[1],0)/largestRing.length}
+   if(Number.isFinite(x)&&Number.isFinite(y))largest.push({p,x:Math.min(1575,Math.max(25,x)),y:Math.min(875,Math.max(25,y)),selected,faint})
+  }
+ }
+ for(const o of largest){
+  const circle=node('circle',{cx:o.x,cy:o.y,r:o.selected?22:18,fill:o.selected?'#ff9e00':'#0a587b',stroke:'white','stroke-width':3,opacity:o.faint?.55:1});svg.appendChild(circle);
+  const label=node('text',{x:o.x,y:o.y+6,'text-anchor':'middle',fill:'white','font-size':o.selected?23:20,'font-weight':800,'font-family':'Arial, sans-serif'});label.textContent=String(o.p.index+1);svg.appendChild(label)
+ }
+ frame.appendChild(svg)
+}
+$('overlayBtn').addEventListener('click',()=>{showParcelOverlay=!showParcelOverlay;renderParcelOverlay()});
 async function renderSelectedMode(){
  if(!storedBbox||!storedKey||!storedDomain){show('먼저 필지 8개를 조회해 주세요.');return}
  const mode=$('mapMode').value;const cfg=WMS_MODES[mode];
@@ -125,7 +211,7 @@ async function renderSelectedMode(){
   const url=makeWmsUrl(storedBbox,storedKey,storedDomain,mode);
   await imageLoad(url);
   activeWmsUrl=url;$('saveBtn').disabled=false;$('openBtn').disabled=false;
-  let msg='8개 필지 조회 완료. '+cfg.label+' 원본 PNG 응답을 받았습니다.\n실제 지적도 경계가 그려져 있는지 화면에서 확인해 주세요.\n흰색 화면이면 다른 출력방식으로 다시 표시할 수 있습니다.\n원본 PNG는 편집하거나 합성하지 않습니다.';show(msg)
+  let msg='8개 필지 조회 완료. '+cfg.label+' 원본 PNG 응답을 받았습니다.\n지번 1~8 표시를 통해 각 필지의 위치를 확인할 수 있습니다.\n원본 PNG는 화면 표시와 별도로 수정 없이 저장됩니다.';show(msg)
  }catch(e){show('지도 출력 오류: '+e.message+'\n다른 출력방식으로 다시 시도해 주세요.');$('preview').textContent='지도 출력 실패'}finally{$('reloadBtn').disabled=false}
 }
 $('reloadBtn').addEventListener('click',renderSelectedMode);
@@ -133,7 +219,7 @@ async function queryAll(){
  const key=$('apiKey').value.trim();if(!key){show('브이월드 인증키를 입력하세요.');return}
  if(!['greenbms.co.kr','www.greenbms.co.kr','localhost','127.0.0.1'].includes(location.hostname)){show('현재 도메인: '+(location.hostname||'(로컬 파일)')+'\n인증키 발급 시 등록한 greenbms.co.kr에 업로드한 뒤 열어야 인증이 성공할 수 있습니다.');return}
  let domain=location.origin; if(location.protocol==='file:'){show('로컬 파일에서는 인증 도메인을 증명할 수 없습니다. greenbms.co.kr에 업로드한 URL에서 실행하세요.');return}
- setBusy(true);activeWmsUrl=null;storedBbox=null;storedKey=null;storedDomain=null;$('reloadBtn').disabled=true;$('saveBtn').disabled=true;$('openBtn').disabled=true; $('preview').textContent='조회 중입니다…';for(const p of parcels){p.state='대기';p.features=[]}drawRows();
+ setBusy(true);activeWmsUrl=null;storedBbox=null;storedKey=null;storedDomain=null;selectedParcelIndex=null;showParcelOverlay=true;$('overlayBtn').disabled=true;$('reloadBtn').disabled=true;$('saveBtn').disabled=true;$('openBtn').disabled=true; $('preview').textContent='조회 중입니다…';for(const p of parcels){p.state='대기';p.features=[]}drawRows();
  try{
   let preferred='WFS';let fails=[];
   for(const p of parcels){p.state='조회 중';drawRows();show((p.index+1)+'/8 필지 조회 중: 미산리 '+p.lot+'\n공식 필지 경계 데이터만 사용합니다.');let f=[];let err=[];
